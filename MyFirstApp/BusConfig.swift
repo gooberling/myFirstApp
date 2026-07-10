@@ -9,7 +9,7 @@ import Foundation
 
 enum BusConfig {
     /// Paste your key from https://data.bus-data.dft.gov.uk/account/settings/
-    static let apiKey = "YOUR_BODS_API_KEY"
+    static let apiKey = "c65f58b2d52a4791d9f5ab35358d4791d666ee8c"
 
     static let lineName = "3X"
     static let stopName = "Moda Hove Central (adj)"

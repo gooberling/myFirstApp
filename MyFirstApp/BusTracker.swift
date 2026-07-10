@@ -99,7 +99,7 @@ final class BusTracker {
         let box = [BusConfig.stopLongitude - halfSize, BusConfig.stopLatitude - halfSize,
                    BusConfig.stopLongitude + halfSize, BusConfig.stopLatitude + halfSize]
         components.queryItems = [
-            URLQueryItem(name: "boundingBox", value: box.map(String.init).joined(separator: ",")),
+            URLQueryItem(name: "boundingBox", value: box.map { String($0) }.joined(separator: ",")),
             URLQueryItem(name: "lineRef", value: BusConfig.lineName),
             URLQueryItem(name: "api_key", value: BusConfig.apiKey),
         ]
