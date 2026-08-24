@@ -29,15 +29,21 @@ struct Service: Identifiable, Hashable, Decodable {
 
 /// One tracked stop and the services that actually call there.
 struct Stop: Identifiable, Hashable, Decodable {
+    /// The compass direction buses approach this stop from. Used to bias the map
+    /// so the stop sits at the far edge, leaving room to watch the bus close in.
+    enum Approach: String { case north, south }
+
     let atco: String
     let name: String
     let lat: Double
     let lon: Double
     let walkMinutes: Int
     let services: [Service]
+    let approach: String?
 
     var id: String { atco }
     var detail: String { "\(walkMinutes) min walk" }
+    var approachDirection: Approach? { approach.flatMap(Approach.init) }
 }
 
 /// The bundled catalog, decoded once on first use.

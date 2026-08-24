@@ -140,17 +140,18 @@ struct ArmedView: View {
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer(minLength: 16)
 
+            Text(caption)
+                .font(Theme.heading(26))
+                .foregroundStyle(Theme.ground)
+                .padding(.top, -18)
+                .padding(.bottom, 12)
             BusMapStrip(stop: settings.stop, buses: tracker.buses)
                 .frame(height: 200)
                 .overlay(Rectangle().stroke(Theme.ground, lineWidth: 2))
 
+            Spacer(minLength: 16)
             Rule(color: Theme.ground).padding(.top, 18)
-            Text(caption)
-                .font(Theme.heading(26))
-                .foregroundStyle(Theme.ground)
-                .padding(.top, 22)
             Text("Buzzing at \(settings.alertLeadMinutes) min. Screen off is fine.")
                 .font(Theme.body(15))
                 .foregroundStyle(Theme.ground.opacity(0.82))
@@ -174,7 +175,7 @@ struct ArmedView: View {
     }
 
     private var caption: String {
-        nearestBus == nil ? "Finding buses…" : "Minutes from \(settings.stop.name)"
+        nearestBus == nil ? "Finding buses…" : "Minutes from bus stop"
     }
 
     private var minutesLabel: String {
@@ -201,9 +202,18 @@ private struct BusMapStrip: View {
     init(stop: Stop, buses: [ApproachingBus]) {
         self.stop = stop
         self.buses = buses
-        // Centre on the stop with a ~250 m radius (500 m span each way).
+        // ~250 m radius (500 m span). Shift the centre towards the approach side so
+        // the stop sits at the far edge, leaving room to watch the bus close in.
+        let offsetMeters = 200.0
+        let dLat = offsetMeters / 111_320.0 // metres per degree latitude
+        var centerLat = stop.lat
+        switch stop.approachDirection {
+        case .north: centerLat += dLat // room to the north; stop near the bottom
+        case .south: centerLat -= dLat // room to the south; stop near the top
+        case nil: break
+        }
         let region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lon),
+            center: CLLocationCoordinate2D(latitude: centerLat, longitude: stop.lon),
             latitudinalMeters: 500, longitudinalMeters: 500)
         _camera = State(initialValue: .region(region))
     }
@@ -215,17 +225,35 @@ private struct BusMapStrip: View {
     var body: some View {
         Map(position: $camera) {
             Annotation("Stop", coordinate: stopCoordinate) {
+                // Flat ink square = the stop, matching the poster's marker style.
                 Rectangle()
                     .fill(Theme.ink)
                     .frame(width: 14, height: 14)
-                    .overlay(Rectangle().stroke(.white, lineWidth: 2))
+                    .overlay(Rectangle().stroke(Theme.ground, lineWidth: 2))
             }
+            .annotationTitles(.hidden)
             ForEach(buses) { bus in
-                Marker(bus.line, systemImage: "bus.fill", coordinate: bus.coordinate)
-                    .tint(Theme.accent)
+                Annotation(bus.line, coordinate: bus.coordinate) {
+                    VStack(spacing: 3) {
+                        Rectangle()
+                            .fill(Theme.accent)
+                            .frame(width: 16, height: 16)
+                            .overlay(Rectangle().stroke(Theme.ground, lineWidth: 2))
+                        Text(bus.line)
+                            .font(Theme.heading(10))
+                            .foregroundStyle(Theme.ground)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Theme.ink)
+                    }
+                }
             }
+            .annotationTitles(.hidden) // we draw our own labels
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+        // Muted, flat, no POI clutter — as close to the flat palette as MapKit allows.
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
+        // Warm the neutral tiles slightly towards the accent so it reads as one piece.
+        .overlay(Theme.accent.opacity(0.10).blendMode(.multiply).allowsHitTesting(false))
     }
 }
 

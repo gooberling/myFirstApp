@@ -6,6 +6,7 @@
     "lon": -0.177531,
     "locality": "",
     "walkMinutes": 6,
+    "approach": "south",
     "services": [
       { "line": "3X", "lines": ["3X"], "destinations": ["Hardwick Road"] },
       { "line": "5", "lines": ["5"], "destinations": ["Hardwick Road"] },
@@ -21,6 +22,7 @@
     "lon": -0.177475,
     "locality": "",
     "walkMinutes": 5,
+    "approach": "north",
     "services": [
       { "line": "3X", "lines": ["3X"], "destinations": ["Brighton University Sports Centre"] },
       { "line": "5", "lines": ["5"], "destinations": ["Craignair Avenue"] },

@@ -45,6 +45,12 @@ KNOWN_WALK_MINUTES = {
     "149000006512": 5,
     "149000007515": 6,
 }
+
+# Compass direction buses approach each stop from, used to bias the map view.
+APPROACH = {
+    "149000006512": "north", # To town
+    "149000007515": "south", # To school
+}
 DEFAULT_WALK_MINUTES = 6
 MAX_DESTINATIONS_PER_SERVICE = 3
 
@@ -169,6 +175,8 @@ def build(gtfs_path, out_path):
         stop["name"] = NAME_OVERRIDES.get(sid, stop["name"])
         stop["locality"] = ""
         stop["walkMinutes"] = KNOWN_WALK_MINUTES.get(sid, DEFAULT_WALK_MINUTES)
+        if sid in APPROACH:
+            stop["approach"] = APPROACH[sid]
         stop["services"] = [
             {
                 "line": g["label"],

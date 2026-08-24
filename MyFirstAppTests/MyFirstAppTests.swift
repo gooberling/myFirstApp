@@ -79,8 +79,8 @@ struct MyFirstAppTests {
         let settings = BusSettings()
         let x = Service(line: "3X", lines: ["3X"], destinations: ["Town"])
         let nine = Service(line: "9", lines: ["9"], destinations: ["Elsewhere"])
-        let stopA = Stop(atco: "A", name: "A", lat: 0, lon: 0, walkMinutes: 5, services: [x, nine])
-        let stopB = Stop(atco: "B", name: "B", lat: 0, lon: 0, walkMinutes: 5, services: [x])
+        let stopA = Stop(atco: "A", name: "A", lat: 0, lon: 0, walkMinutes: 5, services: [x, nine], approach: nil)
+        let stopB = Stop(atco: "B", name: "B", lat: 0, lon: 0, walkMinutes: 5, services: [x], approach: nil)
 
         settings.select(stop: stopA)
         settings.selectedLines = ["3X", "9"]
