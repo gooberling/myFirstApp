@@ -2,8 +2,8 @@
 //  BusTracker.swift
 //  MyFirstApp
 //
-//  Polls the BODS SIRI-VM feed and raises a local notification when a
-//  tracked bus is within the warning time of the stop.
+//  Polls the BODS SIRI-VM feed for the selected stop and line, and raises a local
+//  notification when a bus is within the warning lead (walk time + buffer) of the stop.
 //
 
 import Foundation
@@ -38,6 +38,14 @@ enum BusTrackerError: LocalizedError {
     }
 }
 
+/// What the tracker is currently following.
+private struct TrackingTarget {
+    let stop: Stop
+    let line: String
+    let leadSeconds: TimeInterval
+    var location: CLLocation { CLLocation(latitude: stop.lat, longitude: stop.lon) }
+}
+
 @MainActor
 @Observable
 final class BusTracker {
@@ -49,12 +57,11 @@ final class BusTracker {
     private var pollTask: Task<Void, Never>?
     private var previousDistances: [String: CLLocationDistance] = [:]
     private var notifiedVehicles: Set<String> = []
+    private var target: TrackingTarget?
 
-    private let stopLocation = CLLocation(latitude: BusConfig.stopLatitude,
-                                          longitude: BusConfig.stopLongitude)
-
-    func startTracking() {
+    func startTracking(stop: Stop, line: String, leadSeconds: TimeInterval) {
         guard !isTracking else { return }
+        target = TrackingTarget(stop: stop, line: line, leadSeconds: leadSeconds)
         isTracking = true
         errorMessage = nil
         previousDistances.removeAll()
@@ -73,6 +80,7 @@ final class BusTracker {
         pollTask = nil
         isTracking = false
         buses = []
+        target = nil
     }
 
     private func requestNotificationPermission() async {
@@ -94,13 +102,14 @@ final class BusTracker {
     }
 
     private func fetchVehicles() async throws -> [VehiclePosition] {
+        guard let target else { return [] }
         var components = URLComponents(string: "https://data.bus-data.dft.gov.uk/api/v1/datafeed/")!
         let halfSize = BusConfig.boundingBoxHalfSize
-        let box = [BusConfig.stopLongitude - halfSize, BusConfig.stopLatitude - halfSize,
-                   BusConfig.stopLongitude + halfSize, BusConfig.stopLatitude + halfSize]
+        let box = [target.stop.lon - halfSize, target.stop.lat - halfSize,
+                   target.stop.lon + halfSize, target.stop.lat + halfSize]
         components.queryItems = [
             URLQueryItem(name: "boundingBox", value: box.map { String($0) }.joined(separator: ",")),
-            URLQueryItem(name: "lineRef", value: BusConfig.lineName),
+            URLQueryItem(name: "lineRef", value: target.line),
             URLQueryItem(name: "api_key", value: BusConfig.apiKey),
         ]
 
@@ -112,14 +121,15 @@ final class BusTracker {
     }
 
     private func updateBuses(from vehicles: [VehiclePosition]) {
+        guard let target else { return }
         var updated: [ApproachingBus] = []
         var newDistances: [String: CLLocationDistance] = [:]
 
-        for vehicle in vehicles where vehicle.lineName.caseInsensitiveCompare(BusConfig.lineName) == .orderedSame {
+        for vehicle in vehicles where vehicle.lineName.caseInsensitiveCompare(target.line) == .orderedSame {
             guard !vehicle.vehicleRef.isEmpty else { continue }
 
             let location = CLLocation(latitude: vehicle.latitude, longitude: vehicle.longitude)
-            let distance = location.distance(from: stopLocation)
+            let distance = location.distance(from: target.location)
             guard distance <= BusConfig.searchRadius else { continue }
 
             newDistances[vehicle.vehicleRef] = distance
@@ -132,9 +142,9 @@ final class BusTracker {
                                      isClosingIn: isClosingIn)
             updated.append(bus)
 
-            if isClosingIn, bus.eta <= BusConfig.warningTime, !notifiedVehicles.contains(bus.id) {
+            if isClosingIn, bus.eta <= target.leadSeconds, !notifiedVehicles.contains(bus.id) {
                 notifiedVehicles.insert(bus.id)
-                sendWarning(for: bus)
+                sendWarning(for: bus, target: target)
             }
         }
 
@@ -142,10 +152,10 @@ final class BusTracker {
         buses = updated.sorted { $0.eta < $1.eta }
     }
 
-    private func sendWarning(for bus: ApproachingBus) {
+    private func sendWarning(for bus: ApproachingBus, target: TrackingTarget) {
         let content = UNMutableNotificationContent()
-        content.title = "\(BusConfig.lineName) approaching"
-        content.body = "About \(bus.etaMinutes) min from \(BusConfig.stopName)."
+        content.title = "\(target.line) approaching"
+        content.body = "Leave now — about \(bus.etaMinutes) min from \(target.stop.name)."
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: "bus-\(bus.id)-\(Date().timeIntervalSince1970)",

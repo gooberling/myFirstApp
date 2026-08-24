@@ -2,7 +2,9 @@
 //  BusConfig.swift
 //  MyFirstApp
 //
-//  Hardcoded details for the stop and route being tracked.
+//  API credentials and tuning constants. The stop and service being tracked are
+//  no longer hardcoded here — they come from the user's selection (BusSettings)
+//  backed by the bundled catalog (StopCatalog).
 //
 
 import Foundation
@@ -10,15 +12,6 @@ import Foundation
 enum BusConfig {
     /// Paste your key from https://data.bus-data.dft.gov.uk/account/settings/
     static let apiKey = "c65f58b2d52a4791d9f5ab35358d4791d666ee8c"
-
-    static let lineName = "3X"
-    static let stopName = "Moda Hove Central (adj)"
-    static let stopAtcoCode = "149000006512"
-    static let stopLatitude = 50.838147
-    static let stopLongitude = -0.177475
-
-    /// Fire the warning notification when a bus is estimated to be this close.
-    static let warningTime: TimeInterval = 6 * 60
 
     /// How often to re-fetch vehicle positions while tracking.
     static let pollInterval: TimeInterval = 15

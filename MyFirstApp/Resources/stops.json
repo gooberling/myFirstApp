@@ -1,0 +1,89 @@
+[
+  {
+    "atco": "149000006512",
+    "name": "Moda Hove Central (adj)",
+    "lat": 50.838147,
+    "lon": -0.177475,
+    "locality": "",
+    "walkMinutes": 5,
+    "services": [
+      {
+        "line": "2B",
+        "destinations": [
+          "George Street (stop J)"
+        ]
+      },
+      {
+        "line": "3X",
+        "destinations": [
+          "Brighton University Sports Centre"
+        ]
+      },
+      {
+        "line": "5",
+        "destinations": [
+          "Craignair Avenue"
+        ]
+      },
+      {
+        "line": "5A",
+        "destinations": [
+          "Craignair Avenue"
+        ]
+      },
+      {
+        "line": "5B",
+        "destinations": [
+          "Brighton University Falmer",
+          "Hollingbury Asda"
+        ]
+      },
+      {
+        "line": "N5",
+        "destinations": [
+          "Hollingbury Asda"
+        ]
+      }
+    ]
+  },
+  {
+    "atco": "149000007515",
+    "name": "Moda Hove Central (opp)",
+    "lat": 50.837404,
+    "lon": -0.177531,
+    "locality": "",
+    "walkMinutes": 6,
+    "services": [
+      {
+        "line": "3X",
+        "destinations": [
+          "Hardwick Road"
+        ]
+      },
+      {
+        "line": "5",
+        "destinations": [
+          "Hardwick Road"
+        ]
+      },
+      {
+        "line": "5A",
+        "destinations": [
+          "Hardwick Road"
+        ]
+      },
+      {
+        "line": "5B",
+        "destinations": [
+          "Hardwick Road"
+        ]
+      },
+      {
+        "line": "N5",
+        "destinations": [
+          "Hardwick Road"
+        ]
+      }
+    ]
+  }
+]

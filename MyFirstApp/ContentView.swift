@@ -2,8 +2,8 @@
 //  ContentView.swift
 //  MyFirstApp
 //
-//  Home → pickers → armed → alert. BusTracker and SiriVMParser are unchanged;
-//  this layer only reads the tracker and tells it when to start and stop.
+//  Home → pickers → armed → alert. The chosen stop and service drive BusTracker;
+//  the stop's walk time (plus a buffer) sets how early the alert fires.
 //
 
 import SwiftUI
@@ -36,7 +36,7 @@ struct ContentView: View {
             PickerSheet(kind: kind, settings: settings) { picker = nil }
         }
         .onChange(of: nearestETA) { _, eta in
-            guard screen == .armed, let eta, eta <= settings.leadSeconds else { return }
+            guard screen == .armed, let eta, eta <= settings.alertLeadSeconds else { return }
             screen = .alert
         }
         .task {
@@ -44,16 +44,20 @@ struct ContentView: View {
         }
     }
 
-    /// The soonest closing-in vehicle on the chosen line, in seconds.
+    /// The soonest closing-in vehicle on the chosen line, in seconds. The tracker
+    /// already filters to the selected stop and line, so anything closing in is
+    /// heading to our stop.
     private var nearestETA: TimeInterval? {
         tracker.buses
-            .filter { $0.isClosingIn && $0.direction.localizedCaseInsensitiveContains(settings.direction.ref) }
+            .filter(\.isClosingIn)
             .map(\.eta)
             .min()
     }
 
     private func start() {
-        tracker.startTracking()
+        tracker.startTracking(stop: settings.stop,
+                              line: settings.service.line,
+                              leadSeconds: settings.alertLeadSeconds)
         screen = .armed
     }
 
@@ -63,15 +67,18 @@ struct ContentView: View {
     }
 }
 
+#Preview {
+    ContentView()
+}
+
 enum PickerKind: String, Identifiable {
-    case direction, service, lead, schedule, stop
+    case service, buffer, schedule, stop
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .direction: "Which way are you going?"
         case .service: "Which service?"
-        case .lead: "How much warning?"
+        case .buffer: "How much extra warning?"
         case .schedule: "When should it arm itself?"
         case .stop: "Which stop?"
         }
@@ -97,12 +104,15 @@ struct HomeView: View {
                 .font(Theme.body(15))
                 .foregroundStyle(Theme.ink.opacity(0.6))
                 .padding(.top, 8)
+            Text("The \(settings.service.line) towards \(settings.service.headsign)")
+                .font(Theme.body(15))
+                .foregroundStyle(Theme.accent)
+                .padding(.top, 6)
 
             Rule().padding(.top, 26)
 
-            SettingRow(label: "Direction", value: settings.direction.name.replacingOccurrences(of: "Towards ", with: "")) { onEdit(.direction) }
             SettingRow(label: "Service", value: settings.service.line) { onEdit(.service) }
-            SettingRow(label: "Warn me", value: "\(settings.leadMinutes) min") { onEdit(.lead) }
+            SettingRow(label: "Warn me", value: "\(settings.alertLeadMinutes) min") { onEdit(.buffer) }
             SettingRow(label: "Schedule", value: settings.schedule.short) { onEdit(.schedule) }
             SettingRow(label: "Stop", value: "Change") { onEdit(.stop) }
 
@@ -126,7 +136,7 @@ struct HomeView: View {
         let base = settings.schedule == .off
             ? "Tap start and it polls every \(Int(BusConfig.pollInterval)) seconds."
             : "\(settings.schedule.name) — it arms itself."
-        return base + " Warning fires at \(settings.leadMinutes) min."
+        return base + " Warns \(settings.alertLeadMinutes) min ahead (\(settings.stop.walkMinutes) min walk + \(settings.bufferMinutes))."
     }
 }
 

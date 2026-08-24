@@ -72,34 +72,32 @@ struct PickerSheet: View {
 
     private var options: [Option] {
         switch kind {
-        case .direction:
-            BusSettings.directions.map { d in
-                (d.name, d.detail, d.ref == settings.direction.ref, { settings.direction = d })
-            }
         case .service:
-            BusSettings.services.map { s in
-                ("Service " + s.line, s.detail, s.line == settings.service.line, { settings.service = s })
+            settings.stop.services.map { s in
+                ("Service " + s.line, "Towards " + s.headsign, s.line == settings.service.line,
+                 { settings.service = s })
             }
-        case .lead:
-            BusSettings.leadTimes.map { n in
-                ("\(n) minutes", leadDetail(n), n == settings.leadMinutes, { settings.leadMinutes = n })
+        case .buffer:
+            BusSettings.bufferOptions.map { n in
+                ("\(settings.stop.walkMinutes + n) min warning", bufferDetail(n),
+                 n == settings.bufferMinutes, { settings.bufferMinutes = n })
             }
         case .schedule:
             Schedule.allCases.map { s in
                 (s.name, s.detail, s == settings.schedule, { settings.schedule = s })
             }
         case .stop:
-            BusSettings.stops.map { s in
-                (s.name, s.detail, s.id == settings.stop.id, { settings.stop = s })
+            StopCatalog.stops.map { s in
+                (s.name, s.detail, s.atco == settings.stop.atco, { settings.select(stop: s) })
             }
         }
     }
 
-    private func leadDetail(_ n: Int) -> String {
+    private func bufferDetail(_ n: Int) -> String {
         switch n {
-        case 3: "You are already at the door"
-        case 6: "Matches BusConfig.warningTime"
-        default: "Time to find your shoes"
+        case 0: "Exactly your walk time"
+        case 2: "A little slack on top of the walk"
+        default: "Plenty of slack"
         }
     }
 }
@@ -114,7 +112,7 @@ struct ArmedView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Kicker(text: "\(settings.service.line) · \(settings.direction.name.lowercased())", color: Theme.ground)
+                Kicker(text: "\(settings.service.line) · towards \(settings.service.headsign)", color: Theme.ground)
                 Kicker(text: tracker.isTracking ? "Live" : "Paused", color: Theme.ground.opacity(0.7))
                     .frame(maxWidth: 80, alignment: .trailing)
             }
@@ -136,7 +134,7 @@ struct ArmedView: View {
                 .font(Theme.heading(26))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 22)
-            Text("Buzzing at \(settings.leadMinutes). Screen off is fine.")
+            Text("Buzzing at \(settings.alertLeadMinutes) min. Screen off is fine.")
                 .font(Theme.body(15))
                 .foregroundStyle(Theme.ground.opacity(0.82))
                 .padding(.top, 12)
@@ -174,7 +172,7 @@ struct AlertView: View {
                 .font(Theme.heading(76))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 52)
-            Text("The \(settings.service.line) \(settings.direction.name.lowercased()) is about \(settings.leadMinutes) minutes from \(settings.stop.name).")
+            Text("The \(settings.service.line) to \(settings.service.headsign) is about \(settings.alertLeadMinutes) minutes from \(settings.stop.name).")
                 .font(Theme.body(20))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 22)
