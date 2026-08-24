@@ -14,6 +14,7 @@ import UserNotifications
 /// A live sighting of the tracked line, with its estimated time to reach the stop.
 struct ApproachingBus: Identifiable {
     let id: String // vehicleRef
+    let line: String
     let direction: String
     let destination: String
     let distance: CLLocationDistance
@@ -41,9 +42,15 @@ enum BusTrackerError: LocalizedError {
 /// What the tracker is currently following.
 private struct TrackingTarget {
     let stop: Stop
-    let line: String
+    let lines: [String]      // BODS line refs being watched
+    let label: String        // display summary, e.g. "All services" or "3X, 5A"
     let leadSeconds: TimeInterval
+
     var location: CLLocation { CLLocation(latitude: stop.lat, longitude: stop.lon) }
+
+    func matches(_ vehicleLine: String) -> Bool {
+        lines.contains { $0.caseInsensitiveCompare(vehicleLine) == .orderedSame }
+    }
 }
 
 @MainActor
@@ -59,9 +66,9 @@ final class BusTracker {
     private var notifiedVehicles: Set<String> = []
     private var target: TrackingTarget?
 
-    func startTracking(stop: Stop, line: String, leadSeconds: TimeInterval) {
+    func startTracking(stop: Stop, lines: [String], label: String, leadSeconds: TimeInterval) {
         guard !isTracking else { return }
-        target = TrackingTarget(stop: stop, line: line, leadSeconds: leadSeconds)
+        target = TrackingTarget(stop: stop, lines: lines, label: label, leadSeconds: leadSeconds)
         isTracking = true
         errorMessage = nil
         previousDistances.removeAll()
@@ -107,11 +114,16 @@ final class BusTracker {
         let halfSize = BusConfig.boundingBoxHalfSize
         let box = [target.stop.lon - halfSize, target.stop.lat - halfSize,
                    target.stop.lon + halfSize, target.stop.lat + halfSize]
-        components.queryItems = [
+        var items = [
             URLQueryItem(name: "boundingBox", value: box.map { String($0) }.joined(separator: ",")),
-            URLQueryItem(name: "lineRef", value: target.line),
             URLQueryItem(name: "api_key", value: BusConfig.apiKey),
         ]
+        // Only narrow the feed with lineRef when watching a single line; multiple
+        // selected lines are filtered client-side in updateBuses.
+        if target.lines.count == 1 {
+            items.append(URLQueryItem(name: "lineRef", value: target.lines[0]))
+        }
+        components.queryItems = items
 
         let (data, response) = try await URLSession.shared.data(from: components.url!)
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
@@ -125,7 +137,7 @@ final class BusTracker {
         var updated: [ApproachingBus] = []
         var newDistances: [String: CLLocationDistance] = [:]
 
-        for vehicle in vehicles where vehicle.lineName.caseInsensitiveCompare(target.line) == .orderedSame {
+        for vehicle in vehicles where target.matches(vehicle.lineName) {
             guard !vehicle.vehicleRef.isEmpty else { continue }
 
             let location = CLLocation(latitude: vehicle.latitude, longitude: vehicle.longitude)
@@ -135,6 +147,7 @@ final class BusTracker {
             newDistances[vehicle.vehicleRef] = distance
             let isClosingIn = previousDistances[vehicle.vehicleRef].map { distance < $0 } ?? false
             let bus = ApproachingBus(id: vehicle.vehicleRef,
+                                     line: vehicle.lineName,
                                      direction: vehicle.direction,
                                      destination: vehicle.destination,
                                      distance: distance,
@@ -154,7 +167,7 @@ final class BusTracker {
 
     private func sendWarning(for bus: ApproachingBus, target: TrackingTarget) {
         let content = UNMutableNotificationContent()
-        content.title = "\(target.line) approaching"
+        content.title = "\(bus.line) approaching"
         content.body = "Leave now — about \(bus.etaMinutes) min from \(target.stop.name)."
         content.sound = .default
 

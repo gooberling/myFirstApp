@@ -10,14 +10,21 @@
 
 import Foundation
 
-/// A service (bus line) that calls at a stop, with the destinations seen for it
-/// in the timetable. The first destination is used as the headsign shown to the user.
+/// A pickable service. `line` is the label shown to the user (e.g. "3X" or "Any 5")
+/// and `lines` is the set of BODS line refs it tracks — usually one, but a grouped
+/// option like "Any 5" tracks several (5, 5A, 5B, N5) at once.
 struct Service: Identifiable, Hashable, Decodable {
     let line: String
+    let lines: [String]
     let destinations: [String]
 
     var id: String { line }
     var headsign: String { destinations.first ?? "" }
+
+    /// True if a live vehicle's line ref belongs to this service.
+    func matches(_ vehicleLine: String) -> Bool {
+        lines.contains { $0.caseInsensitiveCompare(vehicleLine) == .orderedSame }
+    }
 }
 
 /// One tracked stop and the services that actually call there.
@@ -30,7 +37,7 @@ struct Stop: Identifiable, Hashable, Decodable {
     let services: [Service]
 
     var id: String { atco }
-    var detail: String { "ATCO \(atco) · \(walkMinutes) min walk" }
+    var detail: String { "\(walkMinutes) min walk" }
 }
 
 /// The bundled catalog, decoded once on first use.

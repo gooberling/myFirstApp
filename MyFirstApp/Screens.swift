@@ -17,7 +17,7 @@ struct PickerSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: onClose) {
-                Kicker(text: "← Back", color: Theme.accent)
+                Kicker(text: closesOnTap ? "← Back" : "✓ Done", color: Theme.accent)
             }
             .buttonStyle(.plain)
 
@@ -34,7 +34,7 @@ struct PickerSheet: View {
                         Button {
                             choose()
                             settings.save()
-                            onClose()
+                            if closesOnTap { onClose() } // multi-select stays open
                         } label: {
                             HStack(spacing: 16) {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -70,24 +70,32 @@ struct PickerSheet: View {
 
     private typealias Option = (String, String, Bool, () -> Void)
 
+    /// The service picker is multi-select: taps toggle and the sheet stays open.
+    private var closesOnTap: Bool { kind != .service }
+
     private var options: [Option] {
         switch kind {
         case .service:
-            settings.stop.services.map { s in
-                ("Service " + s.line, "Towards " + s.headsign, s.line == settings.service.line,
-                 { settings.service = s })
+            var rows: [Option] = [
+                ("All services", "Notify me for any bus at this stop",
+                 settings.allSelected, { settings.selectAllServices() })
+            ]
+            rows += settings.stop.services.map { s in
+                (s.line, "Towards " + s.headsign, settings.isSelected(s.line),
+                 { settings.toggle(s.line) })
             }
+            return rows
         case .buffer:
-            BusSettings.bufferOptions.map { n in
+            return BusSettings.bufferOptions.map { n in
                 ("\(settings.stop.walkMinutes + n) min warning", bufferDetail(n),
                  n == settings.bufferMinutes, { settings.bufferMinutes = n })
             }
         case .schedule:
-            Schedule.allCases.map { s in
+            return Schedule.allCases.map { s in
                 (s.name, s.detail, s == settings.schedule, { settings.schedule = s })
             }
         case .stop:
-            StopCatalog.stops.map { s in
+            return StopCatalog.stops.map { s in
                 (s.name, s.detail, s.atco == settings.stop.atco, { settings.select(stop: s) })
             }
         }
@@ -102,6 +110,10 @@ struct PickerSheet: View {
     }
 }
 
+#Preview("Service picker") {
+    PickerSheet(kind: .service, settings: BusSettings()) {}
+}
+
 // MARK: - Armed (option 1c — red poster, one number)
 
 struct ArmedView: View {
@@ -112,7 +124,7 @@ struct ArmedView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Kicker(text: "\(settings.service.line) · towards \(settings.service.headsign)", color: Theme.ground)
+                Kicker(text: watchingLabel, color: Theme.ground)
                 Kicker(text: tracker.isTracking ? "Live" : "Paused", color: Theme.ground.opacity(0.7))
                     .frame(maxWidth: 80, alignment: .trailing)
             }
@@ -154,6 +166,22 @@ struct ArmedView: View {
         guard let next = tracker.buses.first(where: { $0.isClosingIn }) else { return "–" }
         return "\(next.etaMinutes)"
     }
+
+    /// Show the specific incoming bus if we have one, else the selection summary.
+    private var watchingLabel: String {
+        if let next = tracker.buses.first(where: { $0.isClosingIn }) {
+            return "\(next.line) · towards \(next.destination)"
+        }
+        return settings.serviceSummary
+    }
+}
+
+#Preview("Armed") {
+    let tracker = BusTracker()
+    tracker.buses = [ApproachingBus(id: "v1", line: "5A", direction: "inbound",
+                                    destination: "Craignair Avenue",
+                                    distance: 1320, eta: 240, isClosingIn: true)]
+    return ArmedView(settings: BusSettings(), tracker: tracker, onStop: {})
 }
 
 // MARK: - Alert
@@ -172,7 +200,7 @@ struct AlertView: View {
                 .font(Theme.heading(76))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 52)
-            Text("The \(settings.service.line) to \(settings.service.headsign) is about \(settings.alertLeadMinutes) minutes from \(settings.stop.name).")
+            Text("\(settings.alertServicePhrase) is about \(settings.alertLeadMinutes) minutes from \(settings.stop.name).")
                 .font(Theme.body(20))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 22)
@@ -191,4 +219,8 @@ struct AlertView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(Theme.accent)
     }
+}
+
+#Preview("Alert") {
+    AlertView(settings: BusSettings(), onNext: {}, onDone: {})
 }

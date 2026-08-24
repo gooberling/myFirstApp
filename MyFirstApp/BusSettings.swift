@@ -53,7 +53,9 @@ final class BusSettings {
     static let bufferOptions = [0, 2, 5]
 
     var stop: Stop
-    var service: Service
+    /// The line refs currently being watched at `stop`. Always non-empty and a
+    /// subset of the stop's offered lines.
+    var selectedLines: Set<String>
     var bufferMinutes: Int
     var schedule: Schedule
 
@@ -62,12 +64,16 @@ final class BusSettings {
         let stops = StopCatalog.stops
         let resolvedStop = stops.first { $0.atco == d.string(forKey: "stopID") } ?? stops[0]
         stop = resolvedStop
-        service = resolvedStop.services.first { $0.line == d.string(forKey: "serviceLine") }
-            ?? resolvedStop.services[0]
+
+        let offered = Set(resolvedStop.services.map(\.line))
+        let stored = Set(d.stringArray(forKey: "selectedLines") ?? [])
+        let valid = stored.intersection(offered)
+        selectedLines = valid.isEmpty ? offered : valid // default: all services
+
         // integer(forKey:) can't tell "unset" from an explicit 0 (a valid option),
         // so check for the key before falling back to the default buffer.
-        if let stored = d.object(forKey: "bufferMinutes") as? Int, Self.bufferOptions.contains(stored) {
-            bufferMinutes = stored
+        if let bufferStored = d.object(forKey: "bufferMinutes") as? Int, Self.bufferOptions.contains(bufferStored) {
+            bufferMinutes = bufferStored
         } else {
             bufferMinutes = Self.bufferOptions[1]
         }
@@ -77,20 +83,57 @@ final class BusSettings {
     func save() {
         let d = UserDefaults.standard
         d.set(stop.atco, forKey: "stopID")
-        d.set(service.line, forKey: "serviceLine")
+        d.set(Array(selectedLines), forKey: "selectedLines")
         d.set(bufferMinutes, forKey: "bufferMinutes")
         d.set(schedule.rawValue, forKey: "schedule")
     }
 
-    /// Switch stops, keeping the same service line if the new stop also has it,
-    /// otherwise falling back to that stop's first service.
+    // MARK: - Service selection
+
+    /// Lines the stop offers, in display order.
+    var offeredLines: [String] { stop.services.map(\.line) }
+
+    /// The watched lines in display order.
+    var trackedLines: [String] { offeredLines.filter(selectedLines.contains) }
+
+    func isSelected(_ line: String) -> Bool { selectedLines.contains(line) }
+
+    /// True when every offered line is watched.
+    var allSelected: Bool {
+        !offeredLines.isEmpty && Set(offeredLines).isSubset(of: selectedLines)
+    }
+
+    /// Toggle one line, but never let the selection become empty.
+    func toggle(_ line: String) {
+        if selectedLines.contains(line) {
+            if selectedLines.count > 1 { selectedLines.remove(line) }
+        } else {
+            selectedLines.insert(line)
+        }
+        save()
+    }
+
+    func selectAllServices() {
+        selectedLines = Set(offeredLines)
+        save()
+    }
+
+    /// A short label for the current selection, e.g. "All services" or "3X, 5A".
+    var serviceSummary: String {
+        allSelected ? "All services" : trackedLines.joined(separator: ", ")
+    }
+
+    /// How the alert refers to the incoming bus.
+    var alertServicePhrase: String {
+        allSelected ? "A bus" : "The \(serviceSummary)"
+    }
+
+    /// Switch stops, keeping any still-valid selected lines, else watching all.
     func select(stop newStop: Stop) {
         stop = newStop
-        if let match = newStop.services.first(where: { $0.line == service.line }) {
-            service = match
-        } else {
-            service = newStop.services[0]
-        }
+        let offered = Set(newStop.services.map(\.line))
+        let keep = selectedLines.intersection(offered)
+        selectedLines = keep.isEmpty ? offered : keep
         save()
     }
 

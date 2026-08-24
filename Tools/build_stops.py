@@ -30,10 +30,10 @@ MIN_LON, MAX_LON = -0.30, -0.08
 # Emit just these stops; leave WHITELIST empty to emit every stop in the box.
 WHITELIST = {"149000006512", "149000007515"}
 
-# GTFS drops the NaPTAN (adj)/(opp) indicator from stop_name, so restore it.
+# Friendly, journey-oriented names shown in the app instead of the raw stop name.
 NAME_OVERRIDES = {
-    "149000006512": "Moda Hove Central (adj)",
-    "149000007515": "Moda Hove Central (opp)",
+    "149000006512": "To town",   # Moda Hove Central (adj), towards Brighton
+    "149000007515": "To school", # Moda Hove Central (opp), towards Portslade
 }
 
 # Sanity anchors: these ATCO codes MUST resolve, or the GTFS stop_id != ATCO
@@ -47,6 +47,20 @@ KNOWN_WALK_MINUTES = {
 }
 DEFAULT_WALK_MINUTES = 6
 MAX_DESTINATIONS_PER_SERVICE = 3
+
+# Lines to drop from the picker entirely.
+EXCLUDE_LINES = {"2B"}
+
+
+def service_group(line):
+    """Map a raw BODS line to (group_id, display_label), or None to drop it.
+
+    Each line is now its own option; the app offers multi-select plus an
+    "All services" shortcut, so no server-side grouping is needed.
+    """
+    if line in EXCLUDE_LINES:
+        return None
+    return (line, line)
 
 
 def open_text(zf, name):
@@ -132,7 +146,8 @@ def build(gtfs_path, out_path):
     # 5. Assemble per-stop service lists.
     catalog = []
     for sid, stop in stops.items():
-        services = defaultdict(set)  # line -> {headsign}
+        # group_id -> {"label": str, "lines": set, "dests": set}
+        groups = {}
         for tid in stop_trips.get(sid, ()):
             info = trip_info.get(tid)
             if not info:
@@ -141,21 +156,26 @@ def build(gtfs_path, out_path):
             line = route_name.get(route_id, "").strip()
             if not line:
                 continue
+            grouped = service_group(line)
+            if grouped is None:
+                continue
+            gid, label = grouped
+            group = groups.setdefault(gid, {"label": label, "lines": set(), "dests": set()})
+            group["lines"].add(line)
             if headsign:
-                services[line].add(headsign)
-            else:
-                services.setdefault(line, set())
-        if not services:
+                group["dests"].add(headsign)
+        if not groups:
             continue
         stop["name"] = NAME_OVERRIDES.get(sid, stop["name"])
         stop["locality"] = ""
         stop["walkMinutes"] = KNOWN_WALK_MINUTES.get(sid, DEFAULT_WALK_MINUTES)
         stop["services"] = [
             {
-                "line": line,
-                "destinations": sorted(dests)[:MAX_DESTINATIONS_PER_SERVICE],
+                "line": g["label"],
+                "lines": sorted(g["lines"], key=_line_key),
+                "destinations": sorted(g["dests"])[:MAX_DESTINATIONS_PER_SERVICE],
             }
-            for line, dests in sorted(services.items(), key=lambda kv: _line_key(kv[0]))
+            for _, g in sorted(groups.items(), key=lambda kv: _line_key(kv[1]["label"]))
         ]
         catalog.append(stop)
 

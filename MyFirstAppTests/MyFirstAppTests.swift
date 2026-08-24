@@ -15,55 +15,77 @@ struct MyFirstAppTests {
 
     @Test func catalogLoadsBothStops() {
         let atcos = Set(StopCatalog.stops.map(\.atco))
-        #expect(atcos.contains("149000006512")) // Moda Hove Central (adj)
-        #expect(atcos.contains("149000007515")) // Moda Hove Central (opp)
+        #expect(atcos.contains("149000006512")) // To town
+        #expect(atcos.contains("149000007515")) // To school
     }
 
-    @Test func adjStopServesExpectedLines() throws {
-        let adj = try #require(StopCatalog.stops.first { $0.atco == "149000006512" })
-        let lines = Set(adj.services.map(\.line))
-        #expect(lines.isSuperset(of: ["2B", "3X", "5"]))
-    }
-
-    @Test func oppStopHasDirectionOnlyServices() throws {
-        let opp = try #require(StopCatalog.stops.first { $0.atco == "149000007515" })
-        let lines = Set(opp.services.map(\.line))
-        #expect(lines.contains("3X"))
-        #expect(!lines.contains("2B")) // 2B only calls at the adj side
+    @Test func eachStopOffersIndividualServicesWithout2B() throws {
+        for atco in ["149000006512", "149000007515"] {
+            let stop = try #require(StopCatalog.stops.first { $0.atco == atco })
+            let labels = stop.services.map(\.line)
+            #expect(labels == ["3X", "5", "5A", "5B", "N5"]) // 5-family un-grouped
+            #expect(!labels.contains("2B"))                   // 2B still excluded
+        }
     }
 
     // MARK: - Decoding
 
     @Test func decodesServiceFromJSON() throws {
-        let json = Data(#"{"line":"5","destinations":["Craignair Avenue","Hangleton"]}"#.utf8)
+        let json = Data(#"{"line":"5A","lines":["5A"],"destinations":["Craignair Avenue"]}"#.utf8)
         let service = try JSONDecoder().decode(Service.self, from: json)
-        #expect(service.line == "5")
+        #expect(service.line == "5A")
+        #expect(service.lines == ["5A"])
         #expect(service.headsign == "Craignair Avenue")
     }
 
-    // MARK: - Selection behaviour
+    // MARK: - Multi-select behaviour
 
-    @MainActor @Test func selectingStopKeepsServiceWhenItStillCalls() throws {
+    @MainActor @Test func selectAllWatchesEveryOfferedLine() throws {
         let settings = BusSettings()
-        let adj = try #require(StopCatalog.stops.first { $0.atco == "149000006512" })
-        let opp = try #require(StopCatalog.stops.first { $0.atco == "149000007515" })
-
-        settings.select(stop: adj)
-        settings.service = try #require(adj.services.first { $0.line == "3X" })
-        settings.select(stop: opp) // opp also has 3X
-        #expect(settings.service.line == "3X")
+        let town = try #require(StopCatalog.stops.first { $0.atco == "149000006512" })
+        settings.select(stop: town)
+        settings.selectAllServices()
+        #expect(settings.allSelected)
+        #expect(Set(settings.trackedLines) == ["3X", "5", "5A", "5B", "N5"])
+        #expect(settings.serviceSummary == "All services")
     }
 
-    @MainActor @Test func selectingStopResetsServiceWhenItNoLongerCalls() throws {
+    @MainActor @Test func togglingLeavesAtLeastOneSelected() throws {
         let settings = BusSettings()
-        let adj = try #require(StopCatalog.stops.first { $0.atco == "149000006512" })
-        let opp = try #require(StopCatalog.stops.first { $0.atco == "149000007515" })
+        let town = try #require(StopCatalog.stops.first { $0.atco == "149000006512" })
+        settings.select(stop: town)
+        settings.selectAllServices()
 
-        settings.select(stop: adj)
-        settings.service = try #require(adj.services.first { $0.line == "2B" }) // 2B only on adj
-        settings.select(stop: opp)
-        #expect(settings.service.line != "2B")
-        #expect(opp.services.contains { $0.line == settings.service.line })
+        for line in ["5", "5A", "5B", "N5"] { settings.toggle(line) }
+        #expect(settings.trackedLines == ["3X"])
+        #expect(!settings.allSelected)
+
+        settings.toggle("3X") // removing the last one is refused
+        #expect(settings.trackedLines == ["3X"])
+    }
+
+    @MainActor @Test func togglingBackOnRestoresAllSelected() throws {
+        let settings = BusSettings()
+        let town = try #require(StopCatalog.stops.first { $0.atco == "149000006512" })
+        settings.select(stop: town)
+        settings.selectAllServices()
+        settings.toggle("5") // drop one
+        #expect(!settings.allSelected)
+        settings.toggle("5") // add it back
+        #expect(settings.allSelected)
+    }
+
+    @MainActor @Test func selectingStopPrunesInvalidLines() {
+        let settings = BusSettings()
+        let x = Service(line: "3X", lines: ["3X"], destinations: ["Town"])
+        let nine = Service(line: "9", lines: ["9"], destinations: ["Elsewhere"])
+        let stopA = Stop(atco: "A", name: "A", lat: 0, lon: 0, walkMinutes: 5, services: [x, nine])
+        let stopB = Stop(atco: "B", name: "B", lat: 0, lon: 0, walkMinutes: 5, services: [x])
+
+        settings.select(stop: stopA)
+        settings.selectedLines = ["3X", "9"]
+        settings.select(stop: stopB) // "9" doesn't call here
+        #expect(settings.selectedLines == ["3X"])
     }
 
     // MARK: - Alert lead

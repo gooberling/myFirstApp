@@ -56,7 +56,8 @@ struct ContentView: View {
 
     private func start() {
         tracker.startTracking(stop: settings.stop,
-                              line: settings.service.line,
+                              lines: settings.trackedLines,
+                              label: settings.serviceSummary,
                               leadSeconds: settings.alertLeadSeconds)
         screen = .armed
     }
@@ -77,7 +78,7 @@ enum PickerKind: String, Identifiable {
 
     var title: String {
         switch self {
-        case .service: "Which service?"
+        case .service: "Which services?"
         case .buffer: "How much extra warning?"
         case .schedule: "When should it arm itself?"
         case .stop: "Which stop?"
@@ -104,14 +105,14 @@ struct HomeView: View {
                 .font(Theme.body(15))
                 .foregroundStyle(Theme.ink.opacity(0.6))
                 .padding(.top, 8)
-            Text("The \(settings.service.line) towards \(settings.service.headsign)")
+            Text("Watching \(settings.serviceSummary)")
                 .font(Theme.body(15))
                 .foregroundStyle(Theme.accent)
                 .padding(.top, 6)
 
             Rule().padding(.top, 26)
 
-            SettingRow(label: "Service", value: settings.service.line) { onEdit(.service) }
+            SettingRow(label: "Services", value: settings.serviceSummary) { onEdit(.service) }
             SettingRow(label: "Warn me", value: "\(settings.alertLeadMinutes) min") { onEdit(.buffer) }
             SettingRow(label: "Schedule", value: settings.schedule.short) { onEdit(.schedule) }
             SettingRow(label: "Stop", value: "Change") { onEdit(.stop) }
