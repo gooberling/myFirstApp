@@ -47,6 +47,12 @@ struct ContentView: View {
             }
             .navigationTitle(BusConfig.stopName)
             .navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden)
+            .background(
+                LinearGradient(colors: [.blue.opacity(0.25), .blue.opacity(0.05)],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+            )
         }
     }
 
