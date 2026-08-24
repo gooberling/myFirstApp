@@ -17,6 +17,7 @@ struct ApproachingBus: Identifiable {
     let line: String
     let direction: String
     let destination: String
+    let coordinate: CLLocationCoordinate2D
     let distance: CLLocationDistance
     let eta: TimeInterval
     /// True once the distance has shrunk between two polls, i.e. the bus is
@@ -74,10 +75,13 @@ final class BusTracker {
         previousDistances.removeAll()
         notifiedVehicles.removeAll()
         pollTask = Task {
+            // Fetch immediately so the armed screen has data as soon as possible;
+            // the permission prompt must not block that first request.
+            await poll()
             await requestNotificationPermission()
             while !Task.isCancelled {
-                await poll()
                 try? await Task.sleep(for: .seconds(BusConfig.pollInterval))
+                await poll()
             }
         }
     }
@@ -150,6 +154,7 @@ final class BusTracker {
                                      line: vehicle.lineName,
                                      direction: vehicle.direction,
                                      destination: vehicle.destination,
+                                     coordinate: location.coordinate,
                                      distance: distance,
                                      eta: distance / BusConfig.assumedBusSpeed,
                                      isClosingIn: isClosingIn)
@@ -168,7 +173,7 @@ final class BusTracker {
     private func sendWarning(for bus: ApproachingBus, target: TrackingTarget) {
         let content = UNMutableNotificationContent()
         content.title = "\(bus.line) approaching"
-        content.body = "Leave now — about \(bus.etaMinutes) min from \(target.stop.name)."
+        content.body = "Leave now — about \(bus.etaMinutes) min from the bus stop."
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: "bus-\(bus.id)-\(Date().timeIntervalSince1970)",

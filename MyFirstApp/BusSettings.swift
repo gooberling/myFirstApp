@@ -77,7 +77,7 @@ final class BusSettings {
         } else {
             bufferMinutes = Self.bufferOptions[1]
         }
-        schedule = Schedule(rawValue: d.string(forKey: "schedule") ?? "") ?? .morning
+        schedule = Schedule(rawValue: d.string(forKey: "schedule") ?? "") ?? .off
     }
 
     func save() {

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MapKit
 
 // MARK: - Picker
 
@@ -130,19 +131,23 @@ struct ArmedView: View {
             }
             Rule(color: Theme.ground).padding(.top, 14)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
             Text(minutesLabel)
-                .font(Theme.heading(260))
+                .font(Theme.heading(190))
                 .monospacedDigit()
-                .kerning(-14)
+                .kerning(-10)
                 .foregroundStyle(Theme.ground)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer(minLength: 0)
+            Spacer(minLength: 16)
 
-            Rule(color: Theme.ground)
-            Text("Minutes from \(settings.stop.name)")
+            BusMapStrip(stop: settings.stop, buses: tracker.buses)
+                .frame(height: 200)
+                .overlay(Rectangle().stroke(Theme.ground, lineWidth: 2))
+
+            Rule(color: Theme.ground).padding(.top, 18)
+            Text(caption)
                 .font(Theme.heading(26))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 22)
@@ -162,17 +167,55 @@ struct ArmedView: View {
         .background(Theme.accent)
     }
 
+    /// Prefer a confirmed closing-in bus, else the nearest one we've seen so we
+    /// can show a number after the first poll instead of waiting for two.
+    private var nearestBus: ApproachingBus? {
+        tracker.buses.first { $0.isClosingIn } ?? tracker.buses.first
+    }
+
+    private var caption: String {
+        nearestBus == nil ? "Finding buses…" : "Minutes from \(settings.stop.name)"
+    }
+
     private var minutesLabel: String {
-        guard let next = tracker.buses.first(where: { $0.isClosingIn }) else { return "–" }
+        guard let next = nearestBus else { return "…" } // searching for buses
         return "\(next.etaMinutes)"
     }
 
     /// Show the specific incoming bus if we have one, else the selection summary.
     private var watchingLabel: String {
-        if let next = tracker.buses.first(where: { $0.isClosingIn }) {
+        if let next = nearestBus {
             return "\(next.line) · towards \(next.destination)"
         }
         return settings.serviceSummary
+    }
+}
+
+/// A live map showing the stop and each tracked bus's actual position. Positions
+/// refresh each poll (~15s), so markers hop rather than glide.
+private struct BusMapStrip: View {
+    let stop: Stop
+    let buses: [ApproachingBus]
+    @State private var camera: MapCameraPosition = .automatic
+
+    private var stopCoordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lon)
+    }
+
+    var body: some View {
+        Map(position: $camera) {
+            Annotation("Stop", coordinate: stopCoordinate) {
+                Rectangle()
+                    .fill(Theme.ink)
+                    .frame(width: 14, height: 14)
+                    .overlay(Rectangle().stroke(.white, lineWidth: 2))
+            }
+            ForEach(buses) { bus in
+                Marker(bus.line, systemImage: "bus.fill", coordinate: bus.coordinate)
+                    .tint(Theme.accent)
+            }
+        }
+        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
     }
 }
 
@@ -180,6 +223,7 @@ struct ArmedView: View {
     let tracker = BusTracker()
     tracker.buses = [ApproachingBus(id: "v1", line: "5A", direction: "inbound",
                                     destination: "Craignair Avenue",
+                                    coordinate: CLLocationCoordinate2D(latitude: 50.8425, longitude: -0.1770),
                                     distance: 1320, eta: 240, isClosingIn: true)]
     return ArmedView(settings: BusSettings(), tracker: tracker, onStop: {})
 }
@@ -200,7 +244,7 @@ struct AlertView: View {
                 .font(Theme.heading(76))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 52)
-            Text("\(settings.alertServicePhrase) is about \(settings.alertLeadMinutes) minutes from \(settings.stop.name).")
+            Text("\(settings.alertServicePhrase) is about \(settings.alertLeadMinutes) minutes from the bus stop.")
                 .font(Theme.body(20))
                 .foregroundStyle(Theme.ground)
                 .padding(.top, 22)
