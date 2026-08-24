@@ -196,7 +196,17 @@ struct ArmedView: View {
 private struct BusMapStrip: View {
     let stop: Stop
     let buses: [ApproachingBus]
-    @State private var camera: MapCameraPosition = .automatic
+    @State private var camera: MapCameraPosition
+
+    init(stop: Stop, buses: [ApproachingBus]) {
+        self.stop = stop
+        self.buses = buses
+        // Centre on the stop with a ~250 m radius (500 m span each way).
+        let region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lon),
+            latitudinalMeters: 500, longitudinalMeters: 500)
+        _camera = State(initialValue: .region(region))
+    }
 
     private var stopCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lon)
